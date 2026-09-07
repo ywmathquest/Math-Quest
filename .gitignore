@@ -1,0 +1,23 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.log
+*.cache
+
+# Node (if you use it)
+node_modules/
+package-lock.json
+
+# Keep index.html - DON'T ignore it!
+# !index.html
