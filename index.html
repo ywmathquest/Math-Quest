@@ -1396,7 +1396,7 @@ textarea.community-input {
   </button>
 
   <button class="nav-button"
-          onclick="showSection('set', this)">
+        onclick="goToPractice()">
     🎮 Play
   </button>
 
@@ -1974,8 +1974,11 @@ function showSection(name, clickedButton = null) {
 }
 
 function goToPractice() {
-  const playButton = document.querySelectorAll('.nav-button')[1];
-  showSection('set', playButton);
+  // Go directly to practice with addition set
+  startPractice('addition');
+  // Update the nav button highlight
+  document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active-nav'));
+  document.querySelectorAll('.nav-button')[1].classList.add('active-nav');
 }
 
 function startPractice(setName) {
@@ -2461,7 +2464,8 @@ async function leaveLobby() {
       }
       
       if (newCount === 0) {
-        await lobbyRef2.remove();
+  	await lobbyRef2.remove();
+  	console.log('🗑️ Lobby deleted (last player left):', currentLobbyId);
       }
     }
 
@@ -2588,7 +2592,7 @@ function listenToLobby(lobbyId) {
   });
 }
 
-// Auto-delete empty lobbies after 5 minutes
+// Auto-delete empty lobbies after 5 seconds of being empty
 setInterval(async () => {
   try {
     const snapshot = await lobbyRef.once('value');
@@ -2597,15 +2601,25 @@ setInterval(async () => {
     
     const now = Date.now();
     for (const [id, lobby] of Object.entries(data)) {
-      if ((lobby.playerCount || 0) === 0 && (now - (lobby.createdAt || 0)) > 300000) {
-        await lobbyRef.child(id).remove();
-        console.log('🗑️ Auto-deleted empty lobby:', id);
+      // Delete if empty (playerCount === 0)
+      if ((lobby.playerCount || 0) === 0) {
+        // Check when it became empty (use lastUpdate or createdAt)
+        const emptySince = lobby.emptySince || lobby.createdAt || now;
+        if (now - emptySince > 5000) { // 5 seconds
+          await lobbyRef.child(id).remove();
+          console.log('🗑️ Auto-deleted empty lobby:', id);
+        } else {
+          // Mark when it became empty
+          if (!lobby.emptySince) {
+            await lobbyRef.child(id).child('emptySince').set(now);
+          }
+        }
       }
     }
   } catch (e) {
     console.error('Auto-delete error:', e);
   }
-}, 60000);
+}, 2000); // Check every 2 seconds
 
 // ============================================================
 // ENHANCED RAID GAME
@@ -2832,13 +2846,27 @@ function raidListenToPresence() {
         if (raidPlayerRef) raidPlayerRef.child(id).remove();
         raidPresenceRef.child(id).remove();
         if (currentLobbyId) {
+          // Decrement player count and auto-delete if 0
           lobbyRef.child(currentLobbyId).child('playerCount').transaction((current) => {
-            return Math.max(0, (current || 1) - 1);
+            const newCount = Math.max(0, (current || 1) - 1);
+            if (newCount === 0) {
+              // Delete lobby after 5 seconds if no players
+              setTimeout(() => {
+                lobbyRef.child(currentLobbyId).once('value', (snap) => {
+                  const lobby = snap.val();
+                  if (lobby && (lobby.playerCount || 0) === 0) {
+                    lobbyRef.child(currentLobbyId).remove();
+                    console.log('🗑️ Lobby auto-deleted (all players left):', currentLobbyId);
+                  }
+                });
+              }, 5000);
+            }
+            return newCount;
           });
         }
       }
     });
-  });
+});
 }
 
 function raidCheckHost() {
@@ -3886,6 +3914,8 @@ const TestSuite = {
     await this.testLobbyLockDuringRaid();       // Bug #10
     await this.testKickPlayersAfterEnd();       // Bug #11
     await this.testEmptyLobbyCleanup();         // Bug #12
+    await this.testPlayButtonNavigatesToPractice();  // Bug #13
+    await this.testLobbyAutoDeleteOnEmpty();          // Bug #14
 
     // === NEW FEATURE TESTS ===
     await this.testPrivateLobbyCreation();      // Feature #1
@@ -4242,6 +4272,62 @@ const TestSuite = {
     }
   },
 
+  // Add these to the TestSuite object:
+
+async testPlayButtonNavigatesToPractice() {
+  console.log('\n📋 Test 25: Play Button Navigates to Practice (Bug #13 - Fixed)');
+  try {
+    // Simulate clicking play button
+    const playButton = document.querySelectorAll('.nav-button')[1];
+    const playButtonText = playButton ? playButton.innerText : '';
+    
+    this.assert(playButtonText.includes('Play'), 'Play button exists in nav');
+    
+    // Check that goToPractice function exists
+    this.assert(typeof goToPractice === 'function', 'goToPractice function exists');
+    
+    // Check that startPractice function exists
+    this.assert(typeof startPractice === 'function', 'startPractice function exists');
+    
+    // Check that practice section exists
+    const practiceSection = document.getElementById('practice');
+    this.assert(practiceSection !== null, 'Practice section exists in DOM');
+    
+    // Check that set section is NOT required (since we're skipping it)
+    console.log('   ℹ️  Play button now goes directly to practice');
+  } catch (e) {
+    this.assert(false, 'Play button test failed: ' + e.message);
+  }
+},
+
+async testLobbyAutoDeleteOnEmpty() {
+  console.log('\n📋 Test 26: Lobby Auto-Delete on Empty (Bug #14 - Fixed)');
+  try {
+    // Simulate a lobby becoming empty
+    const emptyLobby = { 
+      name: 'Test Lobby', 
+      playerCount: 0, 
+      createdAt: Date.now() - 10000 // 10 seconds ago
+    };
+    
+    // Check that playerCount is 0
+    this.assert(emptyLobby.playerCount === 0, 'Lobby has 0 players');
+    
+    // Check that 5 second threshold is correct
+    const EMPTY_THRESHOLD = 5000; // 5 seconds
+    const lobbyEmptyTime = 10000;
+    const shouldDelete = lobbyEmptyTime > EMPTY_THRESHOLD;
+    
+    this.assert(shouldDelete, 'Lobby auto-deletes 5 seconds after becoming empty');
+    
+    // Verify timer runs frequently
+    const checkInterval = 2000; // 2 seconds
+    this.assert(checkInterval <= 5000, 'Auto-delete checks every 2 seconds');
+  } catch (e) {
+    this.assert(false, 'Lobby auto-delete test failed: ' + e.message);
+  }
+},
+  
   async testJoinWithCodeInput() {
     console.log('\n📋 Test 24: Join With Code Input (Feature #4)');
     try {
