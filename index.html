@@ -4365,6 +4365,12 @@ setTimeout(async () => {
   }
 }, 3000);
 
+// Expose state to test page
+window.raidG = raidG;
+window.raidLocal = raidLocal;
+window.questionSets = questionSets;
+window.firebaseConfig = firebaseConfig;
+
 </script>
 
 </body>

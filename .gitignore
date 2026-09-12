@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -67,3 +68,28 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+=======
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.log
+*.cache
+
+# Node (if you use it)
+node_modules/
+package-lock.json
+
+# Keep index.html - DON'T ignore it!
+# !index.html
+>>>>>>> f0713b2ba9f07767bb1ca62dede0690809583cf3
